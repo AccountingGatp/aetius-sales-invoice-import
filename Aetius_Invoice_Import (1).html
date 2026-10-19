@@ -1,0 +1,926 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aetius Invoice Import</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: files and rate settings in a left rail, reconciliation results on the right. */
+:root{
+  --bg:#f2f4f6; --surface:#ffffff; --ink:#15212b; --muted:#59697a; --line:#d8dfe6; --soft:#e9eef2;
+  --accent:#0b6670; --accent-ink:#ffffff; --accent-soft:#dcefef;
+  --good:#17743f; --good-soft:#dff3e6; --warn:#9a5b00; --warn-soft:#fdf0d2; --bad:#b0281d; --bad-soft:#fbe3df;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e151b; --surface:#16202a; --ink:#e6edf3; --muted:#93a3b3; --line:#2a3744; --soft:#1e2a35;
+  --accent:#4fc1c9; --accent-ink:#06262a; --accent-soft:#17383c;
+  --good:#5fd08d; --good-soft:#15341f; --warn:#f0b254; --warn-soft:#3a2b0c; --bad:#ff8d80; --bad-soft:#3c1a16;
+  color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#0e151b; --surface:#16202a; --ink:#e6edf3; --muted:#93a3b3; --line:#2a3744; --soft:#1e2a35;
+  --accent:#4fc1c9; --accent-ink:#06262a; --accent-soft:#17383c;
+  --good:#5fd08d; --good-soft:#15341f; --warn:#f0b254; --warn-soft:#3a2b0c; --bad:#ff8d80; --bad-soft:#3c1a16;
+  color-scheme:dark;}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--sans);padding-block:20px 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1360px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-size:22px;line-height:1.2;margin:0;font-weight:600;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:2px 0 0}
+.tag{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.grid{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.rail{display:flex;flex-direction:column;gap:16px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;min-width:0}
+.card h2{font-size:14px;margin:0 0 10px;font-weight:600;display:flex;gap:8px;align-items:baseline}
+.card h2 .n{font:500 12px var(--mono);color:var(--accent)}
+.drop{display:block;border:1.5px dashed var(--line);border-radius:6px;padding:20px 14px;text-align:center;cursor:pointer;background:var(--bg);transition:border-color .15s,background .15s}
+.drop:hover,.drop.over,.drop:focus-within{border-color:var(--accent);background:var(--accent-soft)}
+.drop b{display:block;font-weight:600}
+.drop span{color:var(--muted);font-size:13px}
+.drop input{position:absolute;opacity:0;width:1px;height:1px}
+.files{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.files li{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:5px;min-width:0}
+.files .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.files .ct{color:var(--muted);font:12px var(--mono);white-space:nowrap}
+.pill{font:500 11px var(--mono);padding:2px 7px;border-radius:99px;background:var(--soft);color:var(--ink);white-space:nowrap}
+.pill.good{background:var(--good-soft);color:var(--good)} .pill.warn{background:var(--warn-soft);color:var(--warn)} .pill.bad{background:var(--bad-soft);color:var(--bad)} .pill.acc{background:var(--accent-soft);color:var(--accent)}
+button{font:inherit;cursor:pointer;border-radius:5px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:6px 12px}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button.primary:hover{filter:brightness(1.08)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.x{border:0;background:none;color:var(--muted);padding:0 4px;font-size:16px;line-height:1}
+button.sm{padding:2px 8px;font-size:12px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.radio{display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid var(--line);border-radius:5px;margin-bottom:8px;cursor:pointer}
+.radio.on{border-color:var(--accent);background:var(--accent-soft)}
+.radio input{margin-top:3px}
+.radio b{display:block;font-weight:600}
+.radio small{color:var(--muted);display:block}
+.field{display:flex;flex-direction:column;gap:3px;margin-top:8px}
+.field label{font-size:12px;color:var(--muted)}
+input[type=text],input[type=number],input[type=date],select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:5px 7px;width:100%;min-width:0}
+td input{padding:3px 5px;font-size:13px}
+.note{font-size:13px;color:var(--muted);margin:8px 0 0}
+.status{padding:8px 10px;border-radius:5px;font-size:13px;margin-top:8px;background:var(--soft)}
+.status.good{background:var(--good-soft);color:var(--good)} .status.warn{background:var(--warn-soft);color:var(--warn)} .status.bad{background:var(--bad-soft);color:var(--bad)}
+details summary{cursor:pointer;font-weight:600;font-size:13px}
+.main{display:flex;flex-direction:column;gap:16px;min-width:0}
+.empty{padding:36px 20px;text-align:left}
+.empty h2{font-size:18px;margin:0 0 6px}
+.empty ol{margin:12px 0 0;padding-left:20px;color:var(--muted)} .empty li{margin:4px 0}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--surface);min-width:0}
+.tile .k{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.tile .v{font:500 20px var(--mono);font-variant-numeric:tabular-nums;margin-top:2px}
+.tile .d{font-size:12px;color:var(--muted)}
+.tile.big{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.tile.big .k,.tile.big .d{color:inherit;opacity:.85}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:8px 12px;color:var(--muted)}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.tabs .c{font:500 11px var(--mono);margin-left:4px;color:var(--muted)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:8px 8px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--soft)}
+td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td.r,th.r{text-align:right} td.m{font-family:var(--mono);font-variant-numeric:tabular-nums}
+td.nowrap{white-space:nowrap}
+.flag{display:block;font-size:12px;color:var(--warn);margin-top:2px}
+.flag.bad{color:var(--bad)}
+.col-notes{min-width:300px;max-width:420px}.col-no{min-width:150px}.col-date{min-width:128px}.col-cust{min-width:190px}.col-amt{min-width:96px}.col-rate{min-width:96px}
+.sec{margin:0 0 6px;font-size:13px;font-weight:600}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px solid var(--line)} .kv:last-child{border:0}
+.kv span:last-child{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="tag">Aetius Outsourcing &amp; Consulting · Zoho Books</div>
+      <h1>Invoice import builder</h1>
+      <p class="sub">PayPal, Upwork and the bank statement go in. One Zoho import CSV of the sales missing from Zoho comes out.</p>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="rail">
+      <section class="card" aria-labelledby="h-files">
+        <h2 id="h-files"><span class="n">1</span>Files</h2>
+        <label class="drop" id="drop">
+          <input type="file" id="picker" multiple accept=".csv,.pdf,text/csv,application/pdf">
+          <b>Drop all files here, or click to choose</b>
+          <span>Zoho invoice export (CSV), PayPal invoices (CSV), Upwork reports (CSV, one or two accounts), ICICI statement (PDF). Each file is recognised automatically.</span>
+        </label>
+        <ul class="files" id="filelist"></ul>
+        <div id="filehint" class="note"></div>
+      </section>
+
+      <section class="card" aria-labelledby="h-rate">
+        <h2 id="h-rate"><span class="n">2</span>Exchange rate (USD to INR)</h2>
+        <label class="radio" id="r-auto"><input type="radio" name="mode" value="auto" checked>
+          <span><b>Daily rate</b><small>Uses a rate found in your files for that invoice. If a file has none, takes the Frankfurter rate for the invoice date.</small></span></label>
+        <label class="radio" id="r-fixed"><input type="radio" name="mode" value="fixed">
+          <span><b>One rate for every invoice</b><small>Same number on all rows.</small></span></label>
+        <div class="field" id="fixedwrap" hidden><label for="fixed">Rate</label><input type="number" id="fixed" step="any" min="0" placeholder="e.g. 88.50"></div>
+        <div id="ratestatus"></div>
+        <details style="margin-top:12px"><summary>More settings</summary>
+          <div class="field"><label for="gatpUsd">USD per GATP bank remittance</label><input type="number" id="gatpUsd" value="5500" step="any" min="0"></div>
+          <div class="field"><label for="dateTol">Upwork match window (days)</label><input type="number" id="dateTol" value="7" min="0" max="60"></div>
+          <div class="field"><label for="itemType">Upwork item type</label><select id="itemType"><option value="">Same as Zoho history</option><option value="service">service</option><option value="goods">goods</option></select></div>
+        </details>
+      </section>
+    </div>
+
+    <main class="main" id="results" aria-live="polite"></main>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+/* Aetius invoice import: pure logic (no DOM). Exposed as globalThis.Core */
+(function (root) {
+  'use strict';
+
+  const HEADER = ('Invoice Number,Estimate Number,Invoice Date,Invoice Status,Customer Name,GST Treatment,TCS Tax Name,TCS Percentage,TCS Amount,Nature Of Collection,TCS Payable Account,TCS Receivable Account,GST Identification Number (GSTIN),TDS Name,TDS Percentage,TDS Section Code,TDS Amount,Place of Supply,PurchaseOrder,Expense Reference ID,Payment Terms,Payment Terms Label,Due Date,Expected Payment Date,Sales person,Shipping Charge Tax Name,Shipping Charge Tax Type,Shipping Charge Tax %,Shipping Charge,Shipping Charge Tax Exemption Code,Shipping Charge SAC Code,Currency Code,Exchange Rate,Account,Item Name,SKU,Item Desc,Item Type,HSN/SAC,Quantity,Usage unit,Item Price,Item Tax Exemption Reason,Is Inclusive Tax,Item Tax,Item Tax Type,Item Tax %,Reverse Charge Tax Name,Reverse Charge Tax Rate,Reverse Charge Tax Type,Is Export Without LUT/Bond,Tax Collected From Customer,Project Name,Supply Type,Discount Type,Is Discount Before Tax,Entity Discount Percent,Entity Discount Amount,Discount,Discount Amount,Adjustment,Adjustment Description,E-Commerce Operator Name,E-Commerce Operator GSTIN,PayPal,Razorpay,Partial Payments,Template Name,Notes,Terms & Conditions,Branch Name,Warehouse Name').split(',');
+
+  const DEFAULT_ALIASES = {
+    'healthnomic partners llc': 'Guru Charan',
+    'peter': 'LRD',
+    'allen berryman': 'patten-title',
+    'priten shah': 'Priten H Shah'
+  };
+
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  /* ---------- generic helpers ---------- */
+  function parseCSV(text) {
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    const rows = [];
+    let row = [], field = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) {
+        if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
+        else field += c;
+      } else if (c === '"') q = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        row.push(field); field = ''; rows.push(row); row = [];
+      } else field += c;
+    }
+    if (field !== '' || row.length) { row.push(field); rows.push(row); }
+    const nonEmpty = rows.filter(r => r.some(v => v.trim() !== ''));
+    if (!nonEmpty.length) return { headers: [], rows: [] };
+    const headers = nonEmpty[0].map(h => h.trim());
+    const out = nonEmpty.slice(1).map(r => {
+      const o = {};
+      headers.forEach((h, i) => { o[h] = (r[i] === undefined ? '' : r[i]).trim(); });
+      return o;
+    });
+    return { headers, rows: out };
+  }
+
+  function csvCell(v) {
+    if (v === null || v === undefined) return '';
+    const s = String(v);
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function toCSV(headers, records) {
+    const lines = [headers.map(csvCell).join(',')];
+    records.forEach(r => lines.push(headers.map(h => csvCell(r[h])).join(',')));
+    return lines.join('\r\n') + '\r\n';
+  }
+
+  function num(v) {
+    if (v === null || v === undefined) return NaN;
+    const s = String(v).replace(/[₹$,\s]/g, '');
+    if (s === '' || s === '-') return NaN;
+    return Number(s);
+  }
+  const pad = n => String(n).padStart(2, '0');
+  function iso(y, m, d) { return y + '-' + pad(m) + '-' + pad(d); }
+
+  /* Accepts: YYYY-MM-DD, DD/MM/YYYY, DD/MM/YY, DD-MM-YYYY, "Oct 19, 2026" */
+  function parseDate(v) {
+    if (!v) return '';
+    const s = String(v).trim();
+    let m;
+    if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})/))) return iso(+m[1], +m[2], +m[3]);
+    if ((m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/))) return iso(+m[3], +m[2], +m[1]);
+    if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/))) return iso(2000 + +m[3], +m[2], +m[1]);
+    if ((m = s.match(/^([A-Za-z]{3})[a-z]*\.? (\d{1,2}),? (\d{4})/))) {
+      const mi = MONTHS.findIndex(x => x.toLowerCase() === m[1].toLowerCase());
+      if (mi >= 0) return iso(+m[3], mi + 1, +m[2]);
+    }
+    return '';
+  }
+  const dayNum = d => { const [y, m, dd] = d.split('-').map(Number); return Math.round(Date.UTC(y, m - 1, dd) / 86400000); };
+  const daysBetween = (a, b) => (a && b) ? dayNum(a) - dayNum(b) : NaN;
+  const addDays = (d, n) => { const t = new Date((dayNum(d) + n) * 86400000); return iso(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate()); };
+  const round2 = x => Math.round(x * 100) / 100;
+  const norm = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+  /* ---------- file type detection ---------- */
+  function detectCSV(headers) {
+    const h = headers.map(x => x.toLowerCase());
+    const has = x => h.includes(x.toLowerCase());
+    if (has('Invoice ID') && has('Customer Name') && has('Invoice Number')) return 'zoho';
+    if (has('Transaction type') && has('Transaction summary')) return 'upwork';
+    if (has('Invoice number') && (has('Total invoice') || has('Amount paid'))) return 'paypal';
+    return 'unknown';
+  }
+
+  /* ---------- Zoho baseline ---------- */
+  function zohoBaseline(rows) {
+    const invoices = new Map();
+    const customers = new Map();
+    rows.forEach(r => {
+      const no = r['Invoice Number'];
+      if (!no) return;
+      const cust = r['Customer Name'];
+      if (cust && !customers.has(norm(cust))) customers.set(norm(cust), cust);
+      if (invoices.has(no)) return;
+      invoices.set(no, {
+        no,
+        date: parseDate(r['Invoice Date']),
+        customer: cust,
+        total: num(r['Total']),
+        rate: num(r['Exchange Rate']),
+        expected: parseDate(r['Expected Payment Date']),
+        lastPay: parseDate(r['Last Payment Date']),
+        status: r['Invoice Status'],
+        account: r['Account'],
+        itemName: r['Item Name'],
+        itemType: r['Item Type'],
+        currency: r['Currency Code']
+      });
+    });
+    let maxT = 0, maxGATP = 0, lastDate = '';
+    const itemTypes = {};
+    invoices.forEach(inv => {
+      let m;
+      if ((m = inv.no.match(/^T(\d+)$/i))) { maxT = Math.max(maxT, +m[1]); if (inv.itemType) itemTypes.upwork = inv.itemType; }
+      if ((m = inv.no.match(/^GATP(\d+)$/i))) maxGATP = Math.max(maxGATP, +m[1]);
+      if (inv.date && inv.date > lastDate) lastDate = inv.date;
+    });
+    return { invoices, customers, maxT, maxGATP, lastDate, upworkItemType: itemTypes.upwork || 'service', count: invoices.size };
+  }
+
+  function makeResolver(zohoCustomers, extraAliases) {
+    const aliases = Object.assign({}, DEFAULT_ALIASES, extraAliases || {});
+    return function resolve(cands) {
+      const list = cands.filter(Boolean);
+      for (const c of list) { const hit = zohoCustomers.get(norm(c)); if (hit) return hit; }
+      for (const c of list) {
+        const a = aliases[norm(c)];
+        if (a) { const hit = zohoCustomers.get(norm(a)); if (hit) return hit; }
+      }
+      return null;
+    };
+  }
+
+  /* ---------- PayPal ---------- */
+  function fileRateFrom(r) {
+    for (const k of Object.keys(r)) {
+      if (/exchange.?rate|fx.?rate|conversion.?rate/i.test(k)) { const v = num(r[k]); if (v > 0) return v; }
+    }
+    return 0;
+  }
+
+  function processPayPal(rows, zoho, resolve, opts) {
+    const out = { items: [], matched: [], hold: [], notes: [], seen: 0 };
+    const seen = new Set();
+    rows.forEach(r => {
+      if ('Type' in r && r['Type'] && !/invoice summary/i.test(r['Type'])) return;
+      const no = r['Invoice number'];
+      if (!no || seen.has(no)) return;
+      seen.add(no); out.seen++;
+      const date = parseDate(r['Invoice date']) || parseDate(r['Date created']);
+      const created = parseDate(r['Date created']);
+      const paid = parseDate(r['Last payment date']);
+      const total = num(r['Total invoice']);
+      const status = r['Status'] || '';
+      const business = r['Business'], name = r['Name'];
+      const z = zoho.invoices.get(no);
+      if (z) {
+        const notes = [];
+        if (Math.abs(z.total - total) > 0.005) notes.push('Amount differs: PayPal ' + total + ' vs Zoho ' + z.total);
+        if (z.date && date && z.date !== date) notes.push('Date differs: PayPal ' + date + ' vs Zoho ' + z.date);
+        out.matched.push({ stream: 'PayPal', ref: no, amount: total, date, zohoNo: z.no, zohoAmount: z.total, zohoDate: z.date, note: notes.join('; ') });
+        return;
+      }
+      const cust = resolve([business, name]);
+      const row = {
+        key: 'PP:' + no, stream: 'PayPal', ref: no, no, date, customer: cust || business || name,
+        customerKnown: !!cust, amount: total, expected: paid, desc: 'Export of services',
+        status, flags: [], fileRate: fileRateFrom(r), rateDate: date
+      };
+      const reasons = [];
+      if (/cancel|refund|void/i.test(status) || num(r['Amount refunded']) > 0) reasons.push('Cancelled or refunded in PayPal (' + status + ')');
+      else if (!/^(paid|unpaid)/i.test(status)) reasons.push('Status is "' + status + '", expected Paid or Unpaid');
+      if (created && date && Math.abs(daysBetween(date, created)) > 7) reasons.push('Invoice date ' + date + ' is far from created date ' + created);
+      if (!cust) reasons.push('Customer "' + (business || name) + '" is not in Zoho. Create it first, then move this row to Import');
+      if (!(total > 0)) reasons.push('Amount missing');
+      if (/^unpaid/i.test(status) && !reasons.length) row.flags.push('Unpaid in PayPal');
+      row.holdReasons = reasons;
+      (reasons.length ? out.hold : out.items).push(row);
+    });
+    return out;
+  }
+
+  /* ---------- Upwork ---------- */
+  function processUpwork(allRows, zoho, resolve, opts) {
+    const out = { items: [], matched: [], hold: [], nonSales: {}, withdrawals: [] };
+    const tol = opts.dateTol;
+    const zohoT = [...zoho.invoices.values()].filter(i => /^T\d+$/i.test(i.no));
+    const used = new Set();
+    const sales = [];
+    allRows.forEach(r => {
+      const type = (r['Transaction type'] || '').trim();
+      const amt = num(r['Amount $']);
+      if (/^(fixed-price|hourly)$/i.test(type) && amt > 0) { sales.push(r); return; }
+      const t = out.nonSales[type] || (out.nonSales[type] = { count: 0, usd: 0 });
+      t.count++; t.usd += isNaN(amt) ? 0 : amt;
+      if (/^withdrawal$/i.test(type)) {
+        out.withdrawals.push({ date: parseDate(r['Date']), usd: amt, inr: num(r['Amount in local currency']) || num((r['Description 2'] || '').replace(/.*INR\):/, '')), account: r['Account name'] });
+      }
+    });
+    sales.sort((a, b) => parseDate(a['Date']).localeCompare(parseDate(b['Date'])) || String(a['Transaction ID']).localeCompare(String(b['Transaction ID'])));
+    sales.forEach(r => {
+      const date = parseDate(r['Date']);
+      const client = r['Client team'];
+      const amt = num(r['Amount $']);
+      const cust = resolve([client]);
+      const summary = r['Transaction summary details'] || r['Transaction summary'] || '';
+      // look for Zoho invoice: same client, same amount, date within tolerance
+      let best = null, near = null;
+      zohoT.forEach(z => {
+        if (used.has(z.no) || norm(z.customer) !== norm(cust || client) || Math.abs(z.total - amt) > 0.01) return;
+        const d = Math.abs(daysBetween(z.date, date));
+        if (d <= tol && (!best || d < best.d)) best = { z, d };
+        else if (!near || d < near.d) near = { z, d };
+      });
+      if (best) {
+        used.add(best.z.no);
+        out.matched.push({ stream: 'Upwork', ref: (client || '') + ' ' + summary, amount: amt, date, zohoNo: best.z.no, zohoAmount: best.z.total, zohoDate: best.z.date, note: best.d ? 'Date differs by ' + best.d + ' day(s)' : '' });
+        return;
+      }
+      const row = {
+        key: 'UW:' + r['Transaction ID'] + ':' + amt, stream: 'Upwork', ref: r['Transaction ID'], no: '', date,
+        customer: cust || client, customerKnown: !!cust, amount: amt, expected: date, desc: summary,
+        flags: [], fileRate: fileRateFrom(r), rateDate: date, account: r['Account name']
+      };
+      if (near) row.flags.push('Zoho has ' + near.z.no + ' for same client and amount on ' + near.z.date + ' (' + near.d + ' days apart). Skip this row if it is the same sale');
+      const reasons = [];
+      if (!cust) reasons.push('Client "' + client + '" is not in Zoho. Create it first, then move this row to Import');
+      row.holdReasons = reasons;
+      (reasons.length ? out.hold : out.items).push(row);
+    });
+    return out;
+  }
+
+  /* ---------- Bank PDF (rows come from pdf.js text items) ---------- */
+  function parseBankPages(pages) {
+    // pages: [[{str,x,y,w}]]
+    const txns = [];
+    pages.forEach(items => {
+      const clean = items.filter(i => i.str && i.str.trim() !== '');
+      const crdr = clean.filter(i => /^(CR|DR)$/.test(i.str.trim()));
+      if (!crdr.length) return;
+      const crX = crdr.map(i => i.x).sort((a, b) => a - b)[Math.floor(crdr.length / 2)];
+      const anchors = clean.filter(i => /^\d{1,5}$/.test(i.str.trim()) && i.x < crX * 0.1 + 10);
+      if (!anchors.length) return;
+      const rowsMap = anchors.map(a => ({ y: a.y, items: [] }));
+      clean.forEach(it => {
+        let best = null, bd = 1e9;
+        rowsMap.forEach(r => { const d = Math.abs(r.y - it.y); if (d < bd) { bd = d; best = r; } });
+        if (best && bd < 40) best.items.push(it);
+      });
+      rowsMap.forEach(r => {
+        const its = r.items;
+        const typeIt = its.find(i => /^(CR|DR)$/.test(i.str.trim()) && Math.abs(i.x - crX) < 25);
+        if (!typeIt) return;
+        const left = its.filter(i => i.x < crX * 0.25);
+        let date = '';
+        for (const i of left.sort((a, b) => a.x - b.x)) { const m = i.str.match(/(\d{2}-\d{2}-\d{4})/); if (m) { date = parseDate(m[1]); break; } }
+        const desc = its.filter(i => i.x >= crX * 0.55 && i.x < crX - 8)
+          .sort((a, b) => b.y - a.y || a.x - b.x).map(i => i.str.trim()).join(' ').replace(/\s+/g, ' ').trim();
+        const amtIt = its.filter(i => /^[\d,]+\.\d{2}$/.test(i.str.trim()) && i.x > crX + 20 && (i.x + (i.w || 0)) < crX * 1.2).sort((a, b) => a.x - b.x)[0];
+        if (!amtIt) return;
+        txns.push({ date, desc, type: typeIt.str.trim(), amount: num(amtIt.str) });
+      });
+    });
+    return txns;
+  }
+
+  function processBank(txns, zoho, opts, upworkWithdrawals) {
+    const out = { items: [], matched: [], credits: { paypal: [], escrow: [], other: [] }, charges: { gst: 0, other: 0 }, hold: [], escrowConfirm: [] };
+    const zohoG = [...zoho.invoices.values()].filter(i => /^GATP\d+$/i.test(i.no));
+    const used = new Set();
+    txns.forEach(t => {
+      if (t.type === 'DR') {
+        if (/Slab\s*(CGST|SGST)|IGST\d|IPAY CHGS/i.test(t.desc)) { if (/Slab|IGST/i.test(t.desc)) out.charges.gst += t.amount; else out.charges.other += t.amount; }
+        return;
+      }
+      if (/GATP/i.test(t.desc) && !/Slab/i.test(t.desc)) {
+        // match to Zoho GATP invoice: date near payment date and INR close
+        let best = null;
+        zohoG.forEach(z => {
+          if (used.has(z.no)) return;
+          const zd = z.lastPay || z.expected || z.date;
+          const dd = Math.abs(daysBetween(zd, t.date));
+          const inr = z.total * z.rate;
+          const diff = Math.abs(inr - t.amount) / t.amount;
+          if (dd <= 5 && diff <= 0.05 && (!best || dd < best.dd)) best = { z, dd, diff };
+        });
+        if (best) {
+          used.add(best.z.no);
+          out.matched.push({ stream: 'Bank (GATP)', ref: t.date + ' INR ' + t.amount.toLocaleString('en-IN'), amount: t.amount, date: t.date, zohoNo: best.z.no, zohoAmount: best.z.total, zohoDate: best.z.date, note: 'INR value differs ' + (best.diff * 100).toFixed(1) + '% from Zoho' });
+          return;
+        }
+        out.items.push({
+          key: 'BK:' + t.date + ':' + t.amount, stream: 'GATP', ref: 'Bank credit ' + t.date + ' INR ' + t.amount.toLocaleString('en-IN'),
+          no: '', date: t.date, customer: 'GATP Solutions', customerKnown: zoho.customers.has('gatp solutions'),
+          amount: opts.gatpUsd, expected: t.date, desc: '', inr: t.amount, flags: ['USD amount assumed. Confirm from the FIRC'],
+          fileRate: 0, rateDate: t.date, holdReasons: []
+        });
+        return;
+      }
+      if (/PAYPAL PAYMENTS/i.test(t.desc)) out.credits.paypal.push(t);
+      else if (/ESCROW/i.test(t.desc)) {
+        out.credits.escrow.push(t);
+        const w = (upworkWithdrawals || []).find(w => Math.abs(Math.abs(w.inr) - t.amount) < 0.01);
+        out.escrowConfirm.push({ bank: t, withdrawal: w || null });
+      } else out.credits.other.push(t);
+    });
+    return out;
+  }
+
+  /* ---------- Frankfurter rates ---------- */
+  async function fetchFrankfurter(dates, fetchFn) {
+    // returns {map: {date:rate}, error?}
+    if (!dates.length) return { map: {} };
+    const sorted = [...dates].sort();
+    const start = addDays(sorted[0], -10), end = sorted[sorted.length - 1];
+    const urls = [
+      'https://api.frankfurter.dev/v1/' + start + '..' + end + '?base=USD&symbols=INR',
+      'https://api.frankfurter.app/' + start + '..' + end + '?from=USD&to=INR'
+    ];
+    let lastErr = '';
+    for (const u of urls) {
+      try {
+        const res = await fetchFn(u);
+        if (!res.ok) { lastErr = 'HTTP ' + res.status; continue; }
+        const j = await res.json();
+        const map = {};
+        Object.keys(j.rates || {}).forEach(d => { if (j.rates[d] && j.rates[d].INR) map[d] = j.rates[d].INR; });
+        if (Object.keys(map).length) return { map };
+        lastErr = 'No rates returned';
+      } catch (e) { lastErr = String(e && e.message || e); }
+    }
+    return { map: {}, error: lastErr };
+  }
+  function lookupRate(map, date) {
+    const ds = Object.keys(map).sort();
+    let pick = '';
+    ds.forEach(d => { if (d <= date) pick = d; });
+    return pick ? { rate: map[pick], date: pick } : null;
+  }
+
+  /* Decide each row's rate. mode: 'auto' | 'fixed' */
+  function applyRates(rows, mode, fixed, fxMap) {
+    rows.forEach(r => {
+      if (r.rateManual) { r.rate = r.rateManual; r.rateSource = 'Typed in'; return; }
+      if (mode === 'fixed') { r.rate = fixed || ''; r.rateSource = fixed ? 'One rate for all' : 'Missing'; return; }
+      if (r.fileRate) { r.rate = r.fileRate; r.rateSource = 'From your file'; return; }
+      const hit = fxMap && lookupRate(fxMap, r.rateDate);
+      if (hit) { r.rate = hit.rate; r.rateSource = 'Frankfurter ' + hit.date; }
+      else { r.rate = ''; r.rateSource = 'No rate found'; }
+    });
+  }
+
+  /* Compare bank-implied rate with the rate used; warn when the assumed USD looks off */
+  function flagGatp(rows) {
+    rows.forEach(r => {
+      r.dyn = [];
+      if (r.stream === 'GATP' && r.inr && r.rate && r.amount) {
+        const implied = r.inr / r.amount;
+        const dev = implied / r.rate - 1;
+        if (Math.abs(dev) > 0.03) r.dyn.push('Bank credit INR ' + r.inr.toLocaleString('en-IN') + ' / USD ' + r.amount + ' = ' + implied.toFixed(2) + ', which is ' + (dev * 100).toFixed(1) + '% from the rate used. The USD amount may not be 5,500');
+      }
+    });
+  }
+
+  /* ---------- Numbering and output ---------- */
+  function assignNumbers(rows, zoho) {
+    const next = { Upwork: zoho.maxT, GATP: zoho.maxGATP };
+    const prefix = { Upwork: 'T', GATP: 'GATP' };
+    ['Upwork', 'GATP'].forEach(s => {
+      rows.filter(r => r.stream === s && !r.hold).sort((a, b) => a.date.localeCompare(b.date) || String(a.ref).localeCompare(String(b.ref))).forEach(r => {
+        next[s]++;
+        r.autoNo = prefix[s] + next[s];
+      });
+    });
+    rows.forEach(r => { if (r.stream === 'PayPal') r.autoNo = r.ref; r.finalNo = r.noManual || r.autoNo || ''; });
+  }
+
+  function buildRecord(r, settings) {
+    const rec = {};
+    HEADER.forEach(h => rec[h] = '');
+    const common = {
+      'Invoice Status': 'Sent', 'GST Treatment': 'overseas', 'Currency Code': 'USD', 'Payment Terms': 0,
+      'Payment Terms Label': 'Due on Receipt', 'HSN/SAC': '998222', 'Quantity': 1, 'Is Inclusive Tax': 'false',
+      'Item Tax': 'IGST0', 'Item Tax Type': 'ItemAmount', 'Item Tax %': 0, 'Is Export Without LUT/Bond': 'NO',
+      'Tax Collected From Customer': 'NO', 'Supply Type': 'Zero Rated', 'Discount Type': 'item_level',
+      'Is Discount Before Tax': 'true', 'Entity Discount Percent': 0, 'Entity Discount Amount': 0, 'Discount': 0,
+      'Discount Amount': 0, 'Adjustment': 0, 'Adjustment Description': 'Adjustment', 'PayPal': 'false',
+      'Razorpay': 'false', 'Partial Payments': 'false', 'Template Name': 'Spreadsheet Template', 'Branch Name': 'Head Office'
+    };
+    Object.assign(rec, common);
+    rec['Invoice Number'] = r.finalNo;
+    rec['Invoice Date'] = r.date;
+    rec['Due Date'] = r.date;
+    rec['Customer Name'] = r.customer;
+    rec['Expected Payment Date'] = r.expected || '';
+    rec['Exchange Rate'] = r.rate === '' || r.rate === undefined ? '' : Number(Number(r.rate).toFixed(6));
+    rec['Item Price'] = round2(r.amount);
+    if (r.stream === 'PayPal') {
+      Object.assign(rec, { 'Account': 'Paypal Sales', 'Item Name': 'Consulting Services', 'Item Desc': 'Export of services', 'Item Type': 'service', 'Usage unit': 'nos', 'Notes': 'Export Under Bond Without Payment of IGST' });
+    } else if (r.stream === 'Upwork') {
+      Object.assign(rec, { 'Account': 'Upwork Accounting Services', 'Item Name': 'Upwork Accounting Sales', 'Item Desc': r.desc, 'Item Type': settings.upworkItemType, 'Notes': 'Thanks for your business.' });
+    } else {
+      Object.assign(rec, { 'Account': 'Outsourcing Accounting Services', 'Item Name': 'Outsourcing Accounting Services', 'Item Type': 'service', 'Notes': 'Thanks for your business.' });
+    }
+    return rec;
+  }
+
+  function fileMonthLabel(rows) {
+    const ds = rows.map(r => r.date).filter(Boolean).sort();
+    if (!ds.length) return 'Month';
+    const d = ds[ds.length - 1];
+    return MONTHS[+d.slice(5, 7) - 1] + d.slice(2, 4);
+  }
+
+  root.Core = { HEADER, parseCSV, toCSV, parseDate, num, daysBetween, addDays, round2, norm, detectCSV, zohoBaseline, makeResolver, processPayPal, processUpwork, parseBankPages, processBank, fetchFrankfurter, lookupRate, applyRates, flagGatp, assignNumbers, buildRecord, fileMonthLabel };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+</script>
+<script>
+(function(){
+'use strict';
+const C = Core;
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const usd = n => (isNaN(n) ? '' : Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+const inr = n => Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+const S = {
+  files: [],            // {id,name,kind,rows?,headers?,txns?,error?}
+  mode: 'auto', fixed: '', gatpUsd: 5500, dateTol: 7, itemType: '',
+  ov: {},               // per-row edits keyed by row key
+  fx: { map: {}, status: 'idle', error: '', key: '' },
+  tab: 'import', nextId: 1
+};
+
+/* ---------- reading files ---------- */
+const KIND = { zoho:'Zoho invoices', paypal:'PayPal invoices', upwork:'Upwork report', bank:'Bank statement', unknown:'Not recognised', skip:'Skipped' };
+async function readFile(f) {
+  const id = S.nextId++;
+  const rec = { id, name: f.name, kind: 'unknown' };
+  try {
+    if (/\.pdf$/i.test(f.name)) {
+      if (!window.pdfjsLib) throw new Error('PDF reader did not load. Check the internet connection and reload.');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      const doc = await pdfjsLib.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
+      const pages = [];
+      for (let p = 1; p <= doc.numPages; p++) {
+        const tc = await (await doc.getPage(p)).getTextContent();
+        pages.push(tc.items.map(i => ({ str: i.str, x: i.transform[4], y: i.transform[5], w: i.width })));
+      }
+      rec.txns = C.parseBankPages(pages);
+      rec.kind = rec.txns.length ? 'bank' : 'unknown';
+      if (!rec.txns.length) rec.error = 'No transaction rows found in this PDF';
+    } else if (/\.csv$/i.test(f.name) || f.type === 'text/csv') {
+      const p = C.parseCSV(await f.text());
+      rec.rows = p.rows; rec.headers = p.headers;
+      rec.kind = C.detectCSV(p.headers);
+      if (rec.kind === 'unknown') rec.error = 'Columns do not match a Zoho, PayPal or Upwork export';
+    } else {
+      rec.kind = 'skip'; rec.error = 'Only CSV and PDF are read. The Zoho column template is already built in.';
+    }
+  } catch (e) { rec.error = String(e.message || e); }
+  return rec;
+}
+async function addFiles(list) {
+  for (const f of list) {
+    const rec = await readFile(f);
+    // a newer file of the same kind and name replaces the older one
+    S.files = S.files.filter(x => x.name !== rec.name);
+    S.files.push(rec);
+  }
+  S.ov = {}; S.fx.key = '';
+  render();
+}
+
+/* ---------- computing ---------- */
+function compute() {
+  const zrows = S.files.filter(f => f.kind === 'zoho').flatMap(f => f.rows);
+  if (!zrows.length) return { needZoho: true };
+  const zoho = C.zohoBaseline(zrows);
+  const resolve = C.makeResolver(zoho.customers);
+  const opts = { dateTol: S.dateTol, gatpUsd: S.gatpUsd };
+  const ppRows = S.files.filter(f => f.kind === 'paypal').flatMap(f => f.rows);
+  const uwRows = S.files.filter(f => f.kind === 'upwork').flatMap(f => f.rows);
+  const txns = S.files.filter(f => f.kind === 'bank').flatMap(f => f.txns);
+  const P = C.processPayPal(ppRows, zoho, resolve, opts);
+  const W = C.processUpwork(uwRows, zoho, resolve, opts);
+  const B = C.processBank(txns, zoho, opts, W.withdrawals);
+  const rows = [...P.items, ...P.hold, ...W.items, ...W.hold, ...B.items];
+  rows.forEach(r => {
+    r.hold = r.holdReasons.length > 0;
+    const o = S.ov[r.key] || {};
+    if (o.customer !== undefined) { const hit = resolve([o.customer]); r.customer = hit || o.customer; r.customerKnown = !!hit; }
+    if (r.customerKnown) r.holdReasons = r.holdReasons.filter(x => !/not in Zoho/.test(x));
+    r.hold = r.holdReasons.length > 0;
+    if (o.amount !== undefined) r.amount = o.amount;
+    if (o.date) { r.date = o.date; r.rateDate = o.date; if (r.stream === 'GATP' || r.stream === 'Upwork') r.expected = o.date; }
+    if (o.rate) r.rateManual = o.rate;
+    if (o.no) r.noManual = o.no;
+    if (o.hold === true) { r.hold = true; r.holdReasons = r.holdReasons.concat(['Held by you']); }
+    if (o.hold === false) { r.hold = false; }
+  });
+  const settings = { upworkItemType: S.itemType || zoho.upworkItemType };
+  return { zoho, P, W, B, rows, settings, opts };
+}
+
+function finishRows(R) {
+  const fxMap = S.fx.status === 'ok' ? S.fx.map : {};
+  C.applyRates(R.rows, S.mode, Number(S.fixed) || 0, fxMap);
+  if (S.fx.status === 'loading') R.rows.forEach(r => { if (r.rateSource === 'No rate found') r.rateSource = 'Fetching…'; });
+  C.assignNumbers(R.rows, R.zoho);
+  C.flagGatp(R.rows);
+  R.imp = R.rows.filter(r => !r.hold);
+  R.hld = R.rows.filter(r => r.hold);
+}
+
+/* fetch Frankfurter rates for every date that needs one */
+function maybeFetchRates(R) {
+  if (S.mode !== 'auto') return;
+  const need = [...new Set(R.rows.filter(r => !r.fileRate && !r.rateManual && r.rateDate).map(r => r.rateDate))].sort();
+  const key = need.join(',');
+  if (!need.length || key === S.fx.key) return;
+  S.fx.key = key; S.fx.status = 'loading'; S.fx.error = '';
+  C.fetchFrankfurter(need, u => fetch(u)).then(res => {
+    if (S.fx.key !== key) return;
+    S.fx.map = res.map; S.fx.error = res.error || '';
+    S.fx.status = Object.keys(res.map).length ? 'ok' : 'error';
+    render();
+  });
+}
+
+/* ---------- rendering ---------- */
+function renderFiles() {
+  const ul = $('#filelist');
+  ul.innerHTML = S.files.map(f => {
+    const n = f.kind === 'bank' ? f.txns.length + ' rows' : f.rows ? f.rows.length + ' rows' : '';
+    const cls = f.error ? 'bad' : 'good';
+    return '<li><span class="pill ' + cls + '">' + esc(KIND[f.kind]) + '</span><span class="nm" title="' + esc(f.name) + '">' + esc(f.name) + '</span><span class="ct">' + n + '</span><button class="x" data-rm="' + f.id + '" aria-label="Remove ' + esc(f.name) + '">×</button></li>' +
+      (f.error ? '<li style="border:0;padding:0 8px;margin-top:-4px"><span class="flag bad">' + esc(f.error) + '</span></li>' : '');
+  }).join('');
+  const kinds = new Set(S.files.map(f => f.kind));
+  const hint = [];
+  if (!kinds.has('zoho')) hint.push('Zoho invoice export is needed first. It tells the tool what is already in the books.');
+  if (!kinds.has('paypal') && !kinds.has('upwork') && !kinds.has('bank')) hint.push('Add at least one of PayPal, Upwork or the bank statement.');
+  $('#filehint').textContent = hint.join(' ');
+}
+
+function rateStatusHTML(R) {
+  if (S.mode === 'fixed') return '<div class="status ' + (Number(S.fixed) > 0 ? 'good' : 'warn') + '">' + (Number(S.fixed) > 0 ? 'Using ' + esc(S.fixed) + ' on every row.' : 'Enter the rate to use on every row.') + '</div>';
+  if (!R || R.needZoho) return '<div class="status">Rates are looked up after the files are loaded.</div>';
+  const fr = { PayPal: 0, Upwork: 0, GATP: 0 }, tot = { PayPal: 0, Upwork: 0, GATP: 0 };
+  R.rows.forEach(r => { tot[r.stream]++; if (r.fileRate) fr[r.stream]++; });
+  const inFile = Object.keys(tot).filter(k => tot[k] && fr[k]).map(k => k + ' ' + fr[k] + '/' + tot[k]);
+  const lines = [];
+  lines.push(inFile.length ? 'Rate found in your files: ' + inFile.join(', ') + '.' : 'None of the files carry a per-invoice rate (PayPal, Upwork and bank rows have none).');
+  let cls = 'good';
+  if (S.fx.status === 'loading') { lines.push('Fetching daily rates from Frankfurter…'); cls = ''; }
+  else if (S.fx.status === 'ok') lines.push('Daily rates loaded from Frankfurter. Weekends and holidays use the previous working day.');
+  else if (S.fx.status === 'error') { cls = 'bad'; lines.push('Could not reach Frankfurter' + (S.fx.error ? ' (' + esc(S.fx.error) + ')' : '') + '. Check the connection and press Retry, type a rate in the table, or switch to one rate for every invoice.'); }
+  else lines.push('No lookup needed.');
+  return '<div class="status ' + cls + '">' + lines.join(' ') + (S.fx.status === 'error' ? ' <button class="sm" id="retry">Retry</button>' : '') + '</div>';
+}
+
+function srcLabel(r) { return r.stream === 'GATP' ? 'Bank · GATP' : r.stream; }
+
+function importRow(r) {
+  const k = esc(r.key);
+  const flags = (r.flags || []).concat(r.dyn || []);
+  const cust = '<input type="text" data-k="' + k + '" data-f="customer" value="' + esc(r.customer) + '">' + (r.customerKnown ? '' : '<span class="flag bad">Not in Zoho. Create the customer before importing.</span>');
+  const rateCls = (r.rate === '' || r.rate === undefined) ? ' style="border-color:var(--bad)"' : '';
+  return '<tr><td class="nowrap">' + esc(srcLabel(r)) + '<div class="tag">' + esc(String(r.ref).slice(0, 26)) + '</div></td>' +
+    '<td class="col-no"><input type="text" data-k="' + k + '" data-f="no" value="' + esc(r.finalNo) + '"></td>' +
+    '<td class="col-date"><input type="date" data-k="' + k + '" data-f="date" value="' + esc(r.date) + '"></td>' +
+    '<td class="col-cust">' + cust + '</td>' +
+    '<td class="col-amt"><input type="number" step="any" data-k="' + k + '" data-f="amount" value="' + esc(r.amount) + '"></td>' +
+    '<td class="col-rate"><input type="number" step="any" data-k="' + k + '" data-f="rate" value="' + esc(r.rate) + '"' + rateCls + '></td>' +
+    '<td class="nowrap"><span class="pill ' + (r.rateSource === 'No rate found' || r.rateSource === 'Missing' ? 'bad' : r.rateSource === 'From your file' ? 'good' : 'acc') + '">' + esc(r.rateSource) + '</span></td>' +
+    '<td class="nowrap m">' + (r.expected && r.stream === 'PayPal' || r.stream !== 'PayPal' ? esc(r.expected || '') : '<span class="pill warn">Unpaid</span>') + '</td>' +
+    '<td class="col-notes">' + (r.desc && r.stream === 'Upwork' ? '<div>' + esc(r.desc) + '</div>' : '') + flags.map(f => '<span class="flag">' + esc(f) + '</span>').join('') + '</td>' +
+    '<td><button class="sm" data-hold="' + k + '">Hold</button></td></tr>';
+}
+function holdRow(r) {
+  const k = esc(r.key);
+  return '<tr><td class="nowrap">' + esc(srcLabel(r)) + '<div class="tag">' + esc(String(r.ref).slice(0, 26)) + '</div></td>' +
+    '<td class="m nowrap">' + esc(r.finalNo) + '</td><td class="m nowrap">' + esc(r.date) + '</td>' +
+    '<td><input type="text" data-k="' + k + '" data-f="customer" value="' + esc(r.customer) + '"></td>' +
+    '<td class="r m">' + usd(r.amount) + '</td>' +
+    '<td>' + r.holdReasons.map(x => '<span class="flag bad">' + esc(x) + '</span>').join('') + '</td>' +
+    '<td><button class="sm" data-imp="' + k + '">Move to import</button></td></tr>';
+}
+
+function renderResults() {
+  const el = $('#results');
+  const R = compute();
+  if (R.needZoho) {
+    $('#ratestatus').innerHTML = rateStatusHTML(null);
+    el.innerHTML = '<section class="card empty"><h2>Start with the Zoho export</h2><p class="sub">Drop the files on the left. Nothing leaves your computer except the daily rate lookup to Frankfurter.</p>' +
+      '<ol><li>Zoho invoice export for last month (CSV) so the tool knows what is already booked.</li><li>PayPal invoice export, Upwork transaction reports and the ICICI statement PDF.</li><li>Check the rows, fix anything flagged, then download the import CSV.</li></ol></section>';
+    return;
+  }
+  finishRows(R);
+  maybeFetchRates(R);
+  $('#ratestatus').innerHTML = rateStatusHTML(R);
+  const by = { PayPal: [0, 0], Upwork: [0, 0], GATP: [0, 0] };
+  R.imp.forEach(r => { by[r.stream][0]++; by[r.stream][1] += Number(r.amount) || 0; });
+  const total = R.imp.reduce((a, r) => a + (Number(r.amount) || 0), 0);
+  const missingRate = R.imp.filter(r => r.rate === '' || r.rate === undefined).length;
+  const unknownCust = R.imp.filter(r => !r.customerKnown).length;
+  const inZoho = R.P.matched.length + R.W.matched.length + R.B.matched.length;
+  const mon = C.fileMonthLabel(R.imp);
+  R.mon = mon; window.__R = R;
+
+  let warn = '';
+  if (R.zoho.lastDate) warn += '<div class="status">Blank "Paid on" means unpaid, so the CSV leaves Expected Payment Date empty. Zeros in the CSV are fixed Zoho fields (payment terms, discount, adjustment, 0% IGST). Open the review sheet for a readable copy. Zoho export runs to ' + esc(R.zoho.lastDate) + '. Anything dated after that counts as not yet booked.</div>';
+  if (missingRate) warn += '<div class="status warn">' + missingRate + ' row(s) have no exchange rate yet. The CSV leaves the rate blank for them.</div>';
+  if (unknownCust) warn += '<div class="status warn">' + unknownCust + ' row(s) use a customer name that is not in Zoho.</div>';
+
+  const tab = S.tab;
+  const head = '<th>Source</th><th>Invoice no.</th><th>Date</th><th>Customer</th><th class="r">USD</th><th>Rate</th><th>Rate source</th><th>Paid on</th><th>Notes</th><th></th>';
+  let body = '';
+  if (tab === 'import') {
+    body = R.imp.length ? '<div class="tw"><table><thead><tr>' + head + '</tr></thead><tbody>' + R.imp.map(importRow).join('') + '</tbody></table></div>' : '<div class="card"><p class="note">No missing sales found in the files loaded.</p></div>';
+  } else if (tab === 'hold') {
+    body = R.hld.length ? '<div class="tw"><table><thead><tr><th>Source</th><th>Invoice no.</th><th>Date</th><th>Customer</th><th class="r">USD</th><th>Why it is held</th><th></th></tr></thead><tbody>' + R.hld.map(holdRow).join('') + '</tbody></table></div><p class="note">Rows here go to the Hold CSV, not the import file. Create a missing customer in Zoho, then move the row to import.</p>' : '<div class="card"><p class="note">Nothing is on hold.</p></div>';
+  } else if (tab === 'zoho') {
+    const all = [...R.P.matched, ...R.W.matched, ...R.B.matched];
+    body = all.length ? '<div class="tw"><table><thead><tr><th>Source</th><th>Reference</th><th>Date</th><th class="r">Source amount</th><th>Zoho invoice</th><th class="r">Zoho amount</th><th>Zoho date</th><th>Difference</th></tr></thead><tbody>' +
+      all.map(m => '<tr><td>' + esc(m.stream) + '</td><td>' + esc(m.ref) + '</td><td class="m nowrap">' + esc(m.date) + '</td><td class="r m">' + (m.stream.startsWith('Bank') ? 'INR ' + inr(m.amount) : usd(m.amount)) + '</td><td class="m">' + esc(m.zohoNo) + '</td><td class="r m">' + usd(m.zohoAmount) + '</td><td class="m nowrap">' + esc(m.zohoDate) + '</td><td>' + (m.note ? '<span class="flag">' + esc(m.note) + '</span>' : '') + '</td></tr>').join('') + '</tbody></table></div>' :
+      '<div class="card"><p class="note">None of the loaded sales were found in the Zoho export.</p></div>';
+  } else {
+    const ns = R.W.nonSales;
+    const nsRows = Object.keys(ns).map(k => '<div class="kv"><span>' + esc(k) + ' <span class="tag">' + ns[k].count + '×</span></span><span>' + usd(ns[k].usd) + '</span></div>').join('');
+    const pp = R.B.credits.paypal, ppTot = pp.reduce((a, t) => a + t.amount, 0);
+    const esc2 = R.B.escrowConfirm.map(e => '<div class="kv"><span>' + esc(e.bank.date) + ' · Upwork withdrawal</span><span>INR ' + inr(e.bank.amount) + (e.withdrawal ? ' ✓ matches report' : ' (no matching withdrawal)') + '</span></div>').join('');
+    const other = R.B.credits.other.map(t => '<div class="kv"><span>' + esc(t.date) + ' · ' + esc(t.desc.slice(0, 48)) + '</span><span>INR ' + inr(t.amount) + '</span></div>').join('');
+    body = '<div class="two"><div class="card"><p class="sec">Upwork rows that are not sales (USD)</p>' + (nsRows || '<p class="note">No Upwork file loaded.</p>') + '<p class="note">Connects, subscription, service fee, withholding tax, card payments and withdrawals are costs or transfers. Sales are the gross Fixed-price and Hourly earnings.</p></div>' +
+      '<div class="card"><p class="sec">Bank credits not turned into invoices</p>' +
+      (R.B.escrowConfirm.length || pp.length || other ? '<div class="kv"><span>PayPal NEFT credits <span class="tag">' + pp.length + '×</span></span><span>INR ' + inr(ppTot) + '</span></div>' + esc2 + other : '<p class="note">No bank statement loaded.</p>') +
+      (R.B.charges.gst ? '<div class="kv"><span>GST on currency conversion (book as bank charges)</span><span>INR ' + inr(R.B.charges.gst) + '</span></div>' : '') +
+      (R.B.charges.other ? '<div class="kv"><span>IPAY charges</span><span>INR ' + inr(R.B.charges.other) + '</span></div>' : '') +
+      '<p class="note">PayPal credits are already covered by the PayPal invoices. Review any other credit by hand.</p></div></div>';
+  }
+
+  el.innerHTML =
+    '<div class="summary">' +
+      '<div class="tile big"><div class="k">To import</div><div class="v">$' + usd(total) + '</div><div class="d">' + R.imp.length + ' invoices · ' + esc(mon) + ' file</div></div>' +
+      ['PayPal', 'Upwork', 'GATP'].map(s => '<div class="tile"><div class="k">' + (s === 'GATP' ? 'Bank · GATP' : s) + '</div><div class="v">$' + usd(by[s][1]) + '</div><div class="d">' + by[s][0] + ' invoice(s)</div></div>').join('') +
+      '<div class="tile"><div class="k">On hold</div><div class="v">' + R.hld.length + '</div><div class="d">separate CSV</div></div>' +
+      '<div class="tile"><div class="k">Already in Zoho</div><div class="v">' + inZoho + '</div><div class="d">skipped</div></div>' +
+    '</div>' + warn +
+    '<div class="bar"><div class="tabs" role="tablist">' +
+      [['import', 'Import', R.imp.length], ['hold', 'Hold', R.hld.length], ['zoho', 'Already in Zoho', inZoho], ['info', 'Not sales', '']].map(t => '<button role="tab" class="' + (tab === t[0] ? 'on' : '') + '" data-tab="' + t[0] + '">' + t[1] + (t[2] !== '' ? '<span class="c">' + t[2] + '</span>' : '') + '</button>').join('') +
+    '</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button id="dl-rev"' + (R.imp.length ? '' : ' disabled') + '>Download review sheet (.xlsx)</button><button id="dl-hold"' + (R.hld.length ? '' : ' disabled') + '>Download hold CSV</button><button class="primary" id="dl-imp"' + (R.imp.length ? '' : ' disabled') + '>Download import CSV</button></div></div>' + body;
+}
+
+function render() { renderFiles(); renderResults(); }
+
+/* ---------- downloads ---------- */
+function saveText(name, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 500);
+}
+function downloadImport() {
+  const R = window.__R; const recs = R.imp.map(r => C.buildRecord(r, R.settings));
+  saveText('Aetius_Invoice_Import_' + R.mon + '.csv', C.toCSV(C.HEADER, recs));
+}
+function downloadHold() {
+  const R = window.__R;
+  const recs = R.hld.map(r => { const rec = C.buildRecord(r, R.settings); rec['Hold Reason'] = r.holdReasons.join(' | '); return rec; });
+  saveText('Aetius_Invoice_Import_' + R.mon + '_Hold.csv', C.toCSV(C.HEADER.concat(['Hold Reason']), recs));
+}
+
+
+function downloadReview() {
+  const R = window.__R;
+  if (!window.XLSX) { alert('Excel library did not load. Check the internet connection.'); return; }
+  const toDate = s => s ? new Date(+s.slice(0,4), +s.slice(5,7) - 1, +s.slice(8,10), 12) : '';
+  const head = ['Source','Invoice No.','Invoice Date','Customer','Description','USD','Exchange Rate','INR Value','Payment Date','Payment Status','Account','Notes'];
+  const rows = R.imp.map(r => {
+    const rec = C.buildRecord(r, R.settings);
+    const paid = !!r.expected;
+    const rate = r.rate === '' ? '' : Number(r.rate);
+    return [srcLabel(r), r.finalNo, toDate(r.date), r.customer, rec['Item Desc'], Number(r.amount), rate, rate === '' ? '' : Math.round(Number(r.amount) * rate * 100) / 100, toDate(r.expected), paid ? 'Paid / received' : 'Unpaid', rec['Account'], (r.flags || []).concat(r.dyn || []).join(' | ')];
+  });
+  const tUsd = R.imp.reduce((a, r) => a + (Number(r.amount) || 0), 0);
+  const tInr = rows.reduce((a, x) => a + (Number(x[7]) || 0), 0);
+  const ws = XLSX.utils.aoa_to_sheet([head].concat(rows, [['Total','','','','',Math.round(tUsd*100)/100,'',Math.round(tInr*100)/100]]), { cellDates: true });
+  const lastRow = rows.length + 1;
+  for (let i = 2; i <= lastRow; i++) {
+    ['C','I'].forEach(c => { if (ws[c+i] && ws[c+i].v) ws[c+i].z = 'dd-mmm-yyyy'; });
+    ['F','H'].forEach(c => { if (ws[c+i]) ws[c+i].z = '#,##0.00'; });
+    if (ws['G'+i]) ws['G'+i].z = '0.00';
+  }
+  ['F','H'].forEach(c => { if (ws[c+(lastRow+1)]) ws[c+(lastRow+1)].z = '#,##0.00'; });
+  ws['!cols'] = [13,18,14,40,42,12,14,15,14,16,32,50].map(w => ({ wch: w }));
+  ws['!freeze'] = { xSplit: 2, ySplit: 1 };
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Review');
+  const hold = R.hld.map(r => [srcLabel(r), r.finalNo, toDate(r.date), r.customer, Number(r.amount), r.holdReasons.join(' | ')]);
+  if (hold.length) {
+    const wh = XLSX.utils.aoa_to_sheet([['Source','Invoice No.','Invoice Date','Customer','USD','Why it is held']].concat(hold), { cellDates: true });
+    for (let i = 2; i <= hold.length + 1; i++) { if (wh['C'+i] && wh['C'+i].v) wh['C'+i].z = 'dd-mmm-yyyy'; }
+    wh['!cols'] = [13,18,14,36,12,90].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, wh, 'On hold');
+  }
+  XLSX.writeFile(wb, 'Aetius_Invoice_Import_' + R.mon + '_Review.xlsx');
+}
+
+/* ---------- events ---------- */
+const drop = $('#drop');
+$('#picker').addEventListener('change', e => { addFiles([...e.target.files]); e.target.value = ''; });
+['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => addFiles([...e.dataTransfer.files]));
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => { if (!drop.contains(e.target)) { e.preventDefault(); addFiles([...e.dataTransfer.files]); } });
+
+$('#filelist').addEventListener('click', e => {
+  const b = e.target.closest('[data-rm]'); if (!b) return;
+  S.files = S.files.filter(f => f.id !== +b.dataset.rm); S.ov = {}; S.fx.key = ''; render();
+});
+document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', () => {
+  S.mode = r.value; S.fx.key = '';
+  $('#fixedwrap').hidden = S.mode !== 'fixed';
+  $('#r-auto').classList.toggle('on', S.mode === 'auto'); $('#r-fixed').classList.toggle('on', S.mode === 'fixed');
+  render();
+}));
+$('#r-auto').classList.add('on');
+$('#fixed').addEventListener('input', e => { S.fixed = e.target.value; renderResults(); });
+$('#gatpUsd').addEventListener('change', e => { S.gatpUsd = Number(e.target.value) || 0; S.ov = {}; render(); });
+$('#dateTol').addEventListener('change', e => { S.dateTol = Math.max(0, Number(e.target.value) || 0); S.ov = {}; render(); });
+$('#itemType').addEventListener('change', e => { S.itemType = e.target.value; render(); });
+
+const res = $('#results');
+res.addEventListener('click', e => {
+  const t = e.target.closest('[data-tab]'); if (t) { S.tab = t.dataset.tab; renderResults(); return; }
+  const h = e.target.closest('[data-hold]'); if (h) { (S.ov[h.dataset.hold] = S.ov[h.dataset.hold] || {}).hold = true; renderResults(); return; }
+  const m = e.target.closest('[data-imp]'); if (m) { (S.ov[m.dataset.imp] = S.ov[m.dataset.imp] || {}).hold = false; renderResults(); return; }
+  if (e.target.id === 'dl-imp') downloadImport();
+  if (e.target.id === 'dl-hold') downloadHold();
+  if (e.target.id === 'dl-rev') downloadReview();
+});
+document.addEventListener('click', e => { if (e.target.id === 'retry') { S.fx.key = ''; renderResults(); } });
+res.addEventListener('change', e => {
+  const i = e.target; if (!i.dataset || !i.dataset.k) return;
+  const o = S.ov[i.dataset.k] = S.ov[i.dataset.k] || {};
+  const f = i.dataset.f, v = i.value;
+  if (f === 'customer') o.customer = v.trim();
+  else if (f === 'amount') o.amount = Number(v) || 0;
+  else if (f === 'date') o.date = v;
+  else if (f === 'rate') o.rate = Number(v) || 0;
+  else if (f === 'no') o.no = v.trim();
+  if (f === 'date') S.fx.key = '';
+  renderResults();
+});
+
+render();
+})();
+</script>
+</body>
+</html>
